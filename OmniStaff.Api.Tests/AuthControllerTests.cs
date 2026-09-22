@@ -1,11 +1,11 @@
 using Microsoft.AspNetCore.Mvc;
 using Moq;
-using OmniStaff. Api.Controllers;
-using OmniStaff. Application.Dtos;
-using OmniStaff. Application.Interfaces;
+using OmniStaff.Api.Controllers;
+using OmniStaff.Application.Dtos;
+using OmniStaff.Application.Interfaces;
 using Xunit;
 
-namespace OmniStaff. Api.Tests;
+namespace OmniStaff.Api.Tests;
 
 public class AuthControllerTests
 {

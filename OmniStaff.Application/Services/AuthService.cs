@@ -4,7 +4,6 @@ using OmniStaff.Application.Dtos;
 using OmniStaff.Application.Interfaces;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
-using System.Security.Cryptography;
 using System.Text;
 
 namespace OmniStaff.Application.Services;
@@ -16,23 +15,25 @@ namespace OmniStaff.Application.Services;
 public class AuthService : IAuthService
 {
     private readonly IConfiguration _configuration;
+    private readonly IUserRepository _userRepo;
     private const int MaxFailedAttempts = 5;
 
-    public AuthService(IConfiguration configuration)
+    public AuthService(IConfiguration configuration, IUserRepository userRepo)
     {
         _configuration = configuration;
+        _userRepo = userRepo;
     }
 
-    public Task<LoginResponse?> LoginAsync(string email, string password)
+    public async Task<LoginResponse?> LoginAsync(string email, string password)
     {
-        // TODO: replace with a real user lookup + hashed password check
-        // (e.g. via IUserRepository backed by OmniStaff. Infrastructure.Persistence.AppDbContext).
-        var isValid = !string.IsNullOrWhiteSpace(email) && !string.IsNullOrWhiteSpace(password);
+        if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password))
+            return null;
 
-        if (!isValid)
-        {
-            return Task.FromResult<LoginResponse?>(null);
-        }
+        var user = await _userRepo.GetByEmailAsync(email);
+        if (user is null) return null;
+
+        // verify password
+        if (!PasswordHasher.VerifyPassword(password, user.PasswordHash)) return null;
 
         var jwtSection = _configuration.GetSection("Jwt");
         var expiryValue = jwtSection["ExpiryMinutes"];
@@ -57,6 +58,6 @@ public class AuthService : IAuthService
 
         var tokenString = new JwtSecurityTokenHandler().WriteToken(token);
 
-        return Task.FromResult<LoginResponse?>(new LoginResponse(tokenString, expiresAt, email));
+        return new LoginResponse(tokenString, expiresAt, user.DisplayName);
     }
 }

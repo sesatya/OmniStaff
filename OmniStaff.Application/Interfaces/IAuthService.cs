@@ -1,6 +1,6 @@
-using OmniStaff. Application.Dtos;
+using OmniStaff.Application.Dtos;
 
-namespace OmniStaff. Application.Interfaces;
+namespace OmniStaff.Application.Interfaces;
 
 public interface IAuthService
 {
