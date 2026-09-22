@@ -1,4 +1,4 @@
-namespace OmniStaff. Domain.Entities;
+namespace OmniStaff.Domain.Entities;
 
 public class User
 {
