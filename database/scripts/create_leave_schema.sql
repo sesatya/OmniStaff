@@ -2,6 +2,17 @@
 -- Save and run this in SSMS, Azure Data Studio, or via your deployment pipeline
 
 -- Create database
+-- Drop dependent objects if present so script is re-runnable (use with caution in production)
+IF OBJECT_ID(N'dbo.LeaveRequestApprovals') IS NOT NULL DROP TABLE dbo.LeaveRequestApprovals;
+IF OBJECT_ID(N'dbo.LeaveRequests') IS NOT NULL DROP TABLE dbo.LeaveRequests;
+IF OBJECT_ID(N'dbo.LeaveBalances') IS NOT NULL DROP TABLE dbo.LeaveBalances;
+IF OBJECT_ID(N'dbo.LeaveTypes') IS NOT NULL DROP TABLE dbo.LeaveTypes;
+IF OBJECT_ID(N'dbo.LeaveRequestStatuses') IS NOT NULL DROP TABLE dbo.LeaveRequestStatuses;
+IF OBJECT_ID(N'dbo.Employees') IS NOT NULL DROP TABLE dbo.Employees;
+IF OBJECT_ID(N'dbo.Users') IS NOT NULL DROP TABLE dbo.Users;
+IF OBJECT_ID(N'dbo.Roles') IS NOT NULL DROP TABLE dbo.Roles;
+IF OBJECT_ID(N'dbo.AuditLogs') IS NOT NULL DROP TABLE dbo.AuditLogs;
+
 IF DB_ID(N'OmniStaff_Leave') IS NULL
 BEGIN
 	CREATE DATABASE OmniStaff_Leave;
@@ -42,8 +53,9 @@ CREATE TABLE Employees (
 	HireDate DATE NULL,
 	Department NVARCHAR(200) NULL,
 	CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
-	CONSTRAINT FK_Employees_Users FOREIGN KEY (UserId) REFERENCES Users(Id) ON DELETE CASCADE,
-	CONSTRAINT FK_Employees_Manager FOREIGN KEY (ManagerId) REFERENCES Employees(Id) ON DELETE SET NULL
+	-- avoid cascade from Users -> Employees to prevent multiple cascade path issues
+	CONSTRAINT FK_Employees_Users FOREIGN KEY (UserId) REFERENCES dbo.Users(Id) ,
+	CONSTRAINT FK_Employees_Manager FOREIGN KEY (ManagerId) REFERENCES dbo.Employees(Id)
 );
 CREATE INDEX IX_Employees_ManagerId ON Employees(ManagerId);
 GO
@@ -68,8 +80,9 @@ CREATE TABLE LeaveBalances (
 	Used DECIMAL(6,2) NOT NULL DEFAULT 0,
 	UpdatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
 	CONSTRAINT UQ_LeaveBalances_Employee_Type_Year UNIQUE (EmployeeId, LeaveTypeId, Year),
-	CONSTRAINT FK_LeaveBalances_Employee FOREIGN KEY (EmployeeId) REFERENCES Employees(Id) ON DELETE CASCADE,
-	CONSTRAINT FK_LeaveBalances_LeaveType FOREIGN KEY (LeaveTypeId) REFERENCES LeaveTypes(Id) ON DELETE CASCADE
+	-- avoid cascading deletes from Employees to LeaveBalances to prevent multiple cascade paths
+	CONSTRAINT FK_LeaveBalances_Employee FOREIGN KEY (EmployeeId) REFERENCES Employees(Id) ,
+	CONSTRAINT FK_LeaveBalances_LeaveType FOREIGN KEY (LeaveTypeId) REFERENCES LeaveTypes(Id) 
 );
 CREATE INDEX IX_LeaveBalances_EmployeeId ON LeaveBalances(EmployeeId);
 GO
@@ -101,10 +114,11 @@ CREATE TABLE LeaveRequests (
 	ManagerComment NVARCHAR(1000) NULL,
 	CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
 	UpdatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
-	CONSTRAINT FK_LeaveRequests_Employee FOREIGN KEY (EmployeeId) REFERENCES Employees(Id) ON DELETE CASCADE,
-	CONSTRAINT FK_LeaveRequests_LeaveType FOREIGN KEY (LeaveTypeId) REFERENCES LeaveTypes(Id) ON DELETE CASCADE,
+	-- avoid cascading deletes from Employees to LeaveRequests to prevent multiple cascade paths
+	CONSTRAINT FK_LeaveRequests_Employee FOREIGN KEY (EmployeeId) REFERENCES Employees(Id),
+	CONSTRAINT FK_LeaveRequests_LeaveType FOREIGN KEY (LeaveTypeId) REFERENCES LeaveTypes(Id) ,
 	CONSTRAINT FK_LeaveRequests_Status FOREIGN KEY (Status) REFERENCES LeaveRequestStatuses(Id),
-	CONSTRAINT FK_LeaveRequests_Manager FOREIGN KEY (ManagerId) REFERENCES Employees(Id) ON DELETE SET NULL,
+	CONSTRAINT FK_LeaveRequests_Manager FOREIGN KEY (ManagerId) REFERENCES Employees(Id) ,
 	CHECK (EndDate >= StartDate)
 );
 CREATE INDEX IX_LeaveRequests_EmployeeId ON LeaveRequests(EmployeeId);
@@ -115,12 +129,13 @@ GO
 CREATE TABLE LeaveRequestApprovals (
 	Id UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID() PRIMARY KEY,
 	LeaveRequestId UNIQUEIDENTIFIER NOT NULL,
-	ApproverEmployeeId UNIQUEIDENTIFIER NOT NULL,
+	ApproverEmployeeId UNIQUEIDENTIFIER NULL,
 	ActionAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
 	Action TINYINT NOT NULL,
 	Comment NVARCHAR(1000) NULL,
-	CONSTRAINT FK_Approvals_Request FOREIGN KEY (LeaveRequestId) REFERENCES LeaveRequests(Id) ON DELETE CASCADE,
-	CONSTRAINT FK_Approvals_Approver FOREIGN KEY (ApproverEmployeeId) REFERENCES Employees(Id) ON DELETE CASCADE
+	CONSTRAINT FK_Approvals_Request FOREIGN KEY (LeaveRequestId) REFERENCES LeaveRequests(Id) ,
+	-- Change approver FK to SET NULL on delete to provide soft cleanup
+	CONSTRAINT FK_Approvals_Approver FOREIGN KEY (ApproverEmployeeId) REFERENCES Employees(Id) 
 );
 CREATE INDEX IX_Approvals_LeaveRequestId ON LeaveRequestApprovals(LeaveRequestId);
 GO
