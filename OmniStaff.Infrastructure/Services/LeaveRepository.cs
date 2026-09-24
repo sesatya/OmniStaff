@@ -30,4 +30,26 @@ public class LeaveRepository : ILeaveRepository
         _db.LeaveRequests.Update(request);
         await _db.SaveChangesAsync();
     }
+
+    public async Task AddApprovalAsync(LeaveRequestApproval approval)
+    {
+        _db.LeaveRequestApprovals.Add(approval);
+        await _db.SaveChangesAsync();
+    }
+
+    public async Task<IEnumerable<LeaveRequest>> GetByManagerAsync(Guid managerId)
+    {
+        return await _db.LeaveRequests
+            .Where(lr => lr.ManagerId == managerId)
+            .AsNoTracking()
+            .ToListAsync();
+    }
+
+    public async Task<IEnumerable<LeaveRequest>> GetByEmployeeAsync(Guid employeeId)
+    {
+        return await _db.LeaveRequests
+            .Where(lr => lr.EmployeeId == employeeId)
+            .AsNoTracking()
+            .ToListAsync();
+    }
 }

@@ -20,7 +20,16 @@ public class EmployeeRepository : IEmployeeRepository
 
     public async Task<Employee?> GetByIdAsync(Guid id)
     {
-        return await _db.Employees.FindAsync(id);
+        return await _db.Employees
+            .Include(e => e.User)
+            .FirstOrDefaultAsync(e => e.Id == id);
+    }
+
+    public async Task<Employee?> GetByUserIdAsync(Guid userId)
+    {
+        return await _db.Employees
+            .Include(e => e.User)
+            .FirstOrDefaultAsync(e => e.UserId == userId);
     }
 
     public async Task CreateAsync(Employee employee)

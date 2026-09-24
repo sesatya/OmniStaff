@@ -63,4 +63,46 @@ public class LeaveService : ILeaveService
 
         return new LeaveRequestDto(request.Id, request.EmployeeId, request.LeaveTypeId, request.StartDate, request.EndDate, request.TotalDays, request.Status.ToString(), request.ManagerId, request.ManagerComment, request.CreatedAtUtc);
     }
+
+    public async Task<bool> ApproveAsync(Guid requestId, ApproveLeaveDto dto)
+    {
+        var req = await _leaveRepo.GetByIdAsync(requestId);
+        if (req is null) return false;
+
+        // Only the assigned manager (if present) should approve/reject
+        if (req.ManagerId.HasValue && req.ManagerId.Value != dto.ApproverEmployeeId)
+        {
+            // unauthorized -- silence as false
+            return false;
+        }
+
+        req.Status = dto.Approve ? LeaveRequestStatus.Approved : LeaveRequestStatus.Rejected;
+        req.ManagerComment = dto.Comment;
+        req.ManagerId = dto.ApproverEmployeeId;
+        req.UpdatedAtUtc = DateTime.UtcNow;
+
+        var approval = new LeaveRequestApproval
+        {
+            LeaveRequestId = req.Id,
+            ApproverEmployeeId = dto.ApproverEmployeeId,
+            Action = req.Status,
+            Comment = dto.Comment,
+            ActionAt = DateTime.UtcNow
+        };
+
+        await _leaveRepo.AddApprovalAsync(approval);
+        await _leaveRepo.UpdateAsync(req);
+
+        // notify employee
+        var employee = await _employeeRepo.GetByIdAsync(req.EmployeeId);
+        var employeeEmail = employee?.User?.Email;
+        if (!string.IsNullOrWhiteSpace(employeeEmail))
+        {
+            var subject = $"Your leave request has been {(dto.Approve ? "approved" : "rejected")}";
+            var body = $"Your leave from {req.StartDate:d} to {req.EndDate:d} was {(dto.Approve ? "approved" : "rejected")}. Comment: {dto.Comment}";
+            await _emailService.SendEmailAsync(employeeEmail, subject, body);
+        }
+
+        return true;
+    }
 }
